@@ -1,2 +1,0 @@
-data/test/genome/STAR_DIR filter=lfs diff=lfs merge=lfs -text
-data/test/genome filter=lfs diff=lfs merge=lfs -text
