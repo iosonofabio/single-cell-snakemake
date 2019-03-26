@@ -1,0 +1,86 @@
+# vim: fdm=indent
+'''
+author:     Fabio Zanini, Zhiyuan Yao
+date:       25/03/19
+content:    Test Snakemake pipeline on VEEV
+'''
+import os
+
+genome_foldername = '../../data/test/genome'
+genome_STAR_foldername = '../../data/test/genome/STAR_DIR'
+samples_foldername = '../../data/test/'
+samplenames = ['sample1']
+
+
+localrules: all, STAR, STAR_makegenome
+
+
+rule all:
+  input: expand(samples_foldername + '{sample}/star/Aligned.out.bam', sample=samplenames)
+
+
+rule STAR:  
+    input:
+      reads=["{dir}/{sample}/fastq/test_R1_001.fastq.gz",
+             "{dir}/{sample}/fastq/test_R2_001.fastq.gz"],
+      genome=genome_STAR_foldername+'/SA'
+    output:
+      mapped="{dir}/{sample}/star/Aligned.out.bam",
+      unmapped=["{dir}/{sample}/star/Unmapped.out.mate1",
+                "{dir}/{sample}/star/Unmapped.out.mate2"]
+    threads: 1
+    params: name="STAR_{sample}", mem="8000"
+    log: logout="{dir}/{sample}/log/cluster_{sample}_STAR.log", logerr="{dir}/{sample}/log/cluster_{sample}_STAR.logerr"
+    run:
+        STAR=os.getenv("STAR", "STAR")
+        s=wildcards["sample"]
+        output_folder=wildcards["dir"]+'/'+wildcards["sample"]+'/'+'star/'
+        shell("""
+            {STAR} \
+            --runThreadN 1 \
+            --runMode alignReads \
+            --genomeDir {genome_STAR_foldername} \
+            --readFilesIn {input.reads[0]} {input.reads[1]} \
+            --readFilesCommand zcat \
+            --outFilterType BySJout \
+            --outFilterMultimapNmax 20 \
+            --alignSJoverhangMin 8 \
+            --alignSJDBoverhangMin 1 \
+            --outFilterMismatchNmax 999 \
+            --outFilterMismatchNoverLmax 0.04 \
+            --alignIntronMin 20 \
+            --alignIntronMax 1000000 \
+            --alignMatesGapMax 1000000 \
+            --outSAMstrandField intronMotif \
+            --outFileNamePrefix {output_folder} \
+            --outSAMtype BAM Unsorted \
+            --outSAMattributes NH HI AS NM MD \
+            --outFilterMatchNminOverLread 0.66 \
+            --outFilterMatchNmin 100 \
+            --outFilterScoreMinOverLread 0.4 \
+            --clip3pAdapterSeq CTGTCTCTTATACACATCT \
+            --outReadsUnmapped Fastx\
+        """)
+
+
+rule STAR_makegenome:
+    input:
+        fasta=genome_foldername+'/Chr17.fa',
+        gtf=genome_foldername+'/Chr17.gtf'
+    output:
+        suffix_array=genome_STAR_foldername+'/SA'
+    threads: 1
+    params: name="STAR_makegenome", mem="8000"
+    log: logout=genome_foldername+'/log_star_makegenome.log', logerr=genome_foldername+'/log_star_makegenome.log'
+    run:
+        STAR=os.getenv("STAR", "STAR")
+        os.makedirs(genome_STAR_foldername, exist_ok=True)
+        shell("""
+            {STAR} \
+            --runThreadN 1 \
+            --runMode genomeGenerate \
+            --genomeDir {genome_STAR_foldername} \
+            --genomeSAindexNbases 4 \
+            --genomeFastaFiles {input.fasta} \
+        """)
+ 
